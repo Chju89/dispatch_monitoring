@@ -1,7 +1,47 @@
-*.pyc
+
+# Byte-compiled / cache files
 __pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.ipynb_checkpoints
+
+# Data
+data/raw/
+data/processed/
+data/feedback/*.csv
+data/feedback/*.json
+
+# Models
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# Environment files
 .env
-*.pt
-*.pth
-data/
-models/
+*.env
+
+# Jupyter Notebook metadata
+.ipynb_checkpoints
+
+# MLflow
+mlruns/
+mlruns.db
+
+# Logs and debug
+*.log
+*.tmp
+
+# Mac OS
+.DS_Store
+
+# VSCode settings
+.vscode/
+
+# Docker
+*.dockerfile
+docker-compose.override.yml
+
+# Ignore backups
+*~
+*.bak
