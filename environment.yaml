@@ -1,7 +1,8 @@
 name: dispatch-monitoring-env
 channels:
-  - conda-forge
   - defaults
+  - conda-forge
+  - pytorch
 dependencies:
   - python=3.10
   - pip
@@ -10,13 +11,13 @@ dependencies:
   - pandas
   - matplotlib
   - scikit-learn
-  - pytorch
-  - torchvision
   - pip:
-      - ultralytics          # YOLOv8
-      - deep_sort_realtime   # Tracking
-      - streamlit            # Feedback UI
-      - mlflow               # Model tracking
+      - torch==2.5.0
+      - torchvision==0.20.0
+      - ultralytics==8.0.170       # YOLOv8
+      - deep_sort_realtime==1.3.1  # Object tracking
+      - streamlit==1.35.0          # Feedback UI
+      - mlflow==2.13.0             # Model tracking
       - tqdm
       - seaborn
 
