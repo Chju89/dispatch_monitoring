@@ -45,3 +45,10 @@ docker-compose.override.yml
 # Ignore backups
 *~
 *.bak
+
+# YOLOv8 artifacts
+runs/
+*.pt
+data/raw/frames/
+data/raw/*.mp4
+yolov8n.pt
