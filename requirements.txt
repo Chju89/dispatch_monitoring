@@ -5,7 +5,7 @@ mlflow==2.13.0
 torch==2.5.0
 torchvision==0.20.0
 opencv-python
-numpy
+numpy=1.23.5
 pandas
 scikit-learn
 matplotlib

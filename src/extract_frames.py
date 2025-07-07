@@ -1,7 +1,7 @@
 import cv2
 import os
 
-video_path = "1473_CH05_20250501133703_154216.mp4"
+video_path = "data/raw/1473_CH05_20250501133703_154216.mp4"
 output_dir = "data/raw/frames"
 os.makedirs(output_dir, exist_ok=True)
 

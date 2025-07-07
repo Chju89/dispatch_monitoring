@@ -7,7 +7,7 @@ dependencies:
   - python=3.10
   - pip
   - opencv
-  - numpy
+  - numpy=1.23.5
   - pandas
   - matplotlib
   - scikit-learn
