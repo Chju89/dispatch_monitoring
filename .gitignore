@@ -27,6 +27,7 @@ models/*.onnx
 # MLflow
 mlruns/
 mlruns.db
+mlartifacts/
 
 # Logs and debug
 *.log

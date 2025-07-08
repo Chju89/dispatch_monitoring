@@ -1,78 +1,55 @@
-import os
 import cv2
-import torch
+import os
 from pathlib import Path
-from deep_sort_realtime.deepsort_tracker import DeepSort
 from ultralytics import YOLO
-from tqdm import tqdm
+from deep_sort_realtime.deepsort_tracker import DeepSort
 
-# === Cấu hình đường dẫn ===
-frame_dir = Path("data/raw/frames")
-output_dir = Path("data/processed/tracking")
-frames_out = output_dir / "frames_with_id"
-crops_out = output_dir / "crops"
-logs_out = output_dir / "logs"
-
-for p in [frames_out, crops_out, logs_out]:
-    p.mkdir(parents=True, exist_ok=True)
-
-# === Load model YOLO + DeepSORT ===
-#model = YOLO("yolov8n.pt")
-model = YOLO("runs/detect/yolov8n_dispatch_train_safe2/weights/best.pt")
+model = YOLO("models/detection/best.pt")
 tracker = DeepSort(max_age=30)
 
-# === Load danh sách ảnh ===
-frames = sorted(frame_dir.glob("*.jpg"))
+input_dir = Path("data/raw/frames")
+output_crop_dir = Path("data/processed/tracking/crops")
+output_frame_dir = Path("data/processed/tracking/frames_with_id")
+output_crop_dir.mkdir(parents=True, exist_ok=True)
+output_frame_dir.mkdir(parents=True, exist_ok=True)
 
-log_file = open(logs_out / "tracks.txt", "w")
-
-for frame_path in tqdm(frames, desc="Tracking"):
+for frame_path in sorted(input_dir.glob("*.jpg")):
     frame = cv2.imread(str(frame_path))
-    #results = model(frame)[0]
-    results = model(frame, conf=0.1)[0]
-    print(f"{frame_path.name} -> Detected: {len(results.boxes)} object(s)")
-
+    results = model.predict(source=frame, imgsz=640, conf=0.1, verbose=False)[0]
 
     detections = []
     for box in results.boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        conf = float(box.conf[0])
-        cls = int(box.cls[0])
-        class_name = model.names[cls]
-        detections.append(([x1, y1, x2 - x1, y2 - y1], conf, class_name))
+        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+        cls_id = int(box.cls[0])
+        detections.append(([x1, y1, x2 - x1, y2 - y1], 0.9, cls_id))
 
-    if len(detections) > 0:
-        tracks = tracker.update_tracks(detections, frame=frame)
-    else:
-        tracks = []
+    if not detections:
+        print(f"[!] No detections in {frame_path.name}, skipping...")
+        continue 
+
+    tracks = tracker.update_tracks(detections, frame=frame)
 
     for track in tracks:
         if not track.is_confirmed():
             continue
         track_id = track.track_id
-        ltrb, class_name = track.to_ltrb(), track.det_class
-
+        ltrb = track.to_ltrb()
         x1, y1, x2, y2 = map(int, ltrb)
-        label = f"{class_name}-{track_id}"
+        cls_name = model.names[track.det_class] if hasattr(track, "det_class") else "object"
+
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, label, (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(frame, f"{cls_name}-{track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-        # Lưu crop
-        crop_dir = crops_out / class_name / f"{int(track_id):03d}"
+        crop_dir = output_crop_dir / cls_name / f"{int(track_id):03d}"
         crop_dir.mkdir(parents=True, exist_ok=True)
-        crop = frame[y1:y2, x1:x2]
-        crop_name = crop_dir / frame_path.name
-        if crop.size != 0:
-            cv2.imwrite(str(crop_name), crop)
+        h, w, _ = frame.shape
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(w, x2)
+        y2 = min(h, y2)
+        crop_img = frame[y1:y2, x1:x2]
+        if crop_img.size > 0:
+            cv2.imwrite(str(crop_dir / frame_path.name), crop_img)
 
-        # Ghi log
-        log_file.write(f"{frame_path.name},{track_id},{class_name},{x1},{y1},{x2},{y2}\n")
-
-    # Lưu frame đã gắn ID
-    out_path = frames_out / frame_path.name
-    cv2.imwrite(str(out_path), frame)
-
-log_file.close()
-print("✅ Done tracking with saved crops & logs.")
+    cv2.imwrite(str(output_frame_dir / frame_path.name), frame)
 
