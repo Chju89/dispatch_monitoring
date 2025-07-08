@@ -17,8 +17,8 @@ for p in [frames_out, crops_out, logs_out]:
     p.mkdir(parents=True, exist_ok=True)
 
 # === Load model YOLO + DeepSORT ===
-model = YOLO("yolov8n.pt")
-#model = YOLO("runs/detect/yolov8n_dispatch_train_safe/weights/best.pt")
+#model = YOLO("yolov8n.pt")
+model = YOLO("runs/detect/yolov8n_dispatch_train_safe2/weights/best.pt")
 tracker = DeepSort(max_age=30)
 
 # === Load danh sách ảnh ===

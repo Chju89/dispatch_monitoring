@@ -11,4 +11,5 @@ scikit-learn
 matplotlib
 seaborn
 tqdm
+pillow
 

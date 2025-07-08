@@ -1,17 +1,18 @@
-# 📦 Dispatch Monitoring System
+# 📦 Dispatch Monitoring System – MLOps Project
 
-An intelligent monitoring system for tracking and classifying items in a commercial kitchen dispatch area. Built with YOLOv8, DeepSORT, and a classification model. Feedback loop is integrated to improve model accuracy over time using user corrections and MLflow tracking.
+An intelligent system for detecting, tracking, and classifying items in a commercial kitchen dispatch area. Built with YOLOv8, DeepSORT, ResNet/MobileNet, and feedback retraining loop. MLflow is integrated for tracking experiments.
 
 ---
 
-## 🚀 Features
+## 🎯 Features
 
-- ✅ **Real-time object detection** using YOLOv8
-- ✅ **Object tracking** with Deep SORT
-- ✅ **Item classification** (`empty`, `not_empty`, `kakigori`)
-- ✅ **User feedback UI** via Streamlit
-- ✅ **Retrain pipeline** based on feedback
-- ✅ **MLflow integration** for experiment tracking
+- ✅ **Object Detection** using YOLOv8
+- ✅ **Object Tracking** with DeepSORT
+- ✅ **Item Classification**: `dish/tray` + `empty/not_empty/kakigori`
+- ✅ **User Feedback** interface (Streamlit)
+- ✅ **Retraining Pipeline** based on feedback
+- ✅ **MLflow Tracking** for detection & classification
+- ✅ **Dockerized**: run full pipeline with MLflow locally
 
 ---
 
@@ -19,67 +20,83 @@ An intelligent monitoring system for tracking and classifying items in a commerc
 
 ```
 
-dispatch\_monitoring\_project/
-│
-├── data/
-│   ├── raw/               # Original video/data
-│   ├── processed/         # Frame-by-frame or cropped data
-│   └── feedback/          # User feedback JSON/CSV
-│
-├── models/                # Trained detection/classification models
-├── notebooks/             # Exploratory notebooks
-├── src/
-│   ├── detection.py       # YOLOv8 inference
-│   ├── tracking.py        # DeepSORT tracking
-│   ├── classify.py        # Classifier inference
-│   ├── feedback\_ui.py     # Streamlit UI
-│   └── retrain.py         # Retraining logic
-│
-├── app.py                 # Run full pipeline
+dispatch_monitoring/
+├── data/                       # Raw + processed + feedback
+│   ├── raw/
+│   ├── processed/
+│   └── feedback/
+├── models/                    # best.pt, resnet18.pt, etc.
+├── mlruns/                    # MLflow logs (optional)
+├── notebooks/                 # .ipynb training on Colab
+├── src/                       # All pipeline code
+│   ├── detection.py
+│   ├── tracking.py
+│   ├── classify.py
+│   ├── feedback\_ui.py
+│   └── retrain.py
+├── app.py                     # Run Streamlit UI for feedback
 ├── requirements.txt
-├── environment.yaml
-├── Dockerfile
-├── docker-compose.yml
+├── log_to_mlflow.py           # Relog from Colab outputs
+├── Dockerfile.app
+├── Dockerfile.mlflow
+├── docker-compose.yaml
 └── README.md
 
 ````
 
 ---
 
-## ⚙️ Installation
+## ⚙️ Setup Instructions
 
-### 📌 Option 1: Local (Conda)
-
+### ✅ Option 1: Docker Compose (App + MLflow)
 ```bash
-conda env create -f environment.yaml
-conda activate dispatch-monitoring-env
-streamlit run app.py
+docker compose up --build
 ````
 
-### 📌 Option 2: Docker
+* MLflow UI → [http://localhost:5000](http://localhost:5000)
+* Streamlit App → [http://localhost:8501](http://localhost:8501)
+
+---
+
+### 🧠 Option 2: Train model on Google Colab
+
+* Use provided notebooks:
+
+  * `notebooks/train_yolov8_colab.ipynb`
+  * `notebooks/train_classifier_colab.ipynb`
+
+* After training, download:
+
+  * `runs/` folder (YOLO)
+  * `resnet18_dispatch.pt` (classifier)
+
+* Use `log_to_mlflow.py` to relog artifacts:
 
 ```bash
-# Build & run using Docker
-docker build -t dispatch-monitoring-app .
-docker run -p 8501:8501 dispatch-monitoring-app
-```
-
-### 📌 Option 3: Docker Compose (App + MLflow)
-
-```bash
-docker-compose up --build
+python log_to_mlflow.py
 ```
 
 ---
 
-## 🧠 How It Works
+## 🔁 Pipeline Overview
 
-1. **Detection**: YOLOv8 model detects trays/plates in each frame.
-2. **Tracking**: DeepSORT assigns unique IDs to follow each object.
-3. **Classification**: Each object is cropped and passed to a classifier.
-4. **Feedback**: User corrects predictions via UI. Feedback is stored.
-5. **Retrain**: When enough feedback is collected, retrain classifier using `src/retrain.py`.
-6. **Track Models**: MLflow logs each version of model and metrics.
+1. **Detection**: YOLOv8 detects dish/tray
+2. **Tracking**: DeepSORT assigns ID
+3. **Classification**: Object → ResNet18/MobileNetV2
+4. **Feedback**: User reviews prediction (via UI)
+5. **Retrain**: `src/retrain.py` with feedback data
+6. **Tracking**: MLflow logs model versions, accuracy, feedback size
+
+---
+
+## 🧪 MLflow Tracking
+
+* MLflow UI: [http://localhost:5000](http://localhost:5000)
+* Logs:
+
+  * Detection + classifier metrics
+  * Params: batch, epochs, lr,...
+  * Artifacts: weights, images, training curves
 
 ---
 
@@ -96,27 +113,18 @@ docker-compose up --build
 
 ---
 
-## 📊 MLflow Tracking
+## ✅ Improvements (Future)
 
-* Access MLflow UI: [http://localhost:5000](http://localhost:5000)
-* Logs:
-
-  * model versions
-  * accuracy
-  * number of feedback samples used for retraining
-
----
-
-## 📌 Todo / Improvements
-
-* [ ] Improve classifier performance with augmentations
-* [ ] Replace Streamlit UI with web app (Flask or FastAPI)
-* [ ] Add CI/CD pipeline for auto-retrain & redeploy
-* [ ] Add GCP / AWS deployment option
+* [ ] Add image augmentation to improve classifier
+* [ ] Replace Streamlit with FastAPI or React UI
+* [ ] Auto-retrain + redeploy using Jenkins or GitHub Actions
+* [ ] Cloud deployment (GCP, AWS, GKE)
 
 ---
 
 ## 👨‍💻 Author
 
 **Nguyễn Quang Triều**
+
+
 
