@@ -1,0 +1,11 @@
+# Dockerfile.mlflow
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /mlflow
+
+# Install mlflow and dependencies
+RUN pip install --no-cache-dir mlflow
+
+# Default command to run MLflow (can be overridden by docker-compose)
+CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]

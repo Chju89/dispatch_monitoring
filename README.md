@@ -1,153 +1,129 @@
-# Dispatch Monitoring System 🚀
+# 🚚 Dispatch Monitoring System
 
-A lightweight end-to-end MLOps pipeline to detect, track, and classify objects in a kitchen dispatch area, with feedback loop and retraining capabilities.
+An end-to-end MLOps pipeline to monitor the kitchen dispatch area by detecting, tracking, and classifying dishes and trays directly on video. Integrated feedback loop enables continuous improvement of the classification model.
 
 ---
 
 ## 🌟 Features
 
-* 👀 Object Detection: YOLOv8-based model to detect `dish` and `tray`
-* 🛍️ Object Tracking: DeepSORT to maintain track IDs across frames
-* 🧃 Classification: ResNet18 model to classify cropped objects into 6 classes:
-
-  * `dish/empty`, `dish/not_empty`, `dish/kakigori`
-  * `tray/empty`, `tray/not_empty`, `tray/kakigori`
-* 📈 MLflow Integration: Logs metrics, parameters, artifacts of both models
-* 📊 Feedback UI: Streamlit app allows user to correct wrong predictions
-* 🔄 Retraining Script: Model improvement loop based on user feedback
+- 🧠 **Object Detection**: YOLOv8-based custom model
+- 🛰️ **Object Tracking**: DeepSORT to maintain consistent IDs across frames
+- 🧪 **Classification**: ResNet18 for classifying dishes/trays into:
+  - `dish/empty`, `dish/not_empty`, `dish/kakigori`
+  - `tray/empty`, `tray/not_empty`, `tray/kakigori`
+- 📋 **Frame-level Logging**: Results saved in structured `.pkl`/`.csv` for later use
+- 🖼️ **Feedback UI**: Interactive Streamlit interface for reviewing and correcting model predictions
+- 🔁 **Retraining Pipeline**: Leverages user feedback to fine-tune classifier
+- 📊 **MLflow Integration**: Logs training runs, artifacts, and metrics for all models
+- 🐳 **Dockerized**: Easily deploy app and MLflow with Docker Compose
 
 ---
 
-## 🔄 Pipeline Overview
+## 🔄 Pipeline Overview (Updated)
 
 ```mermaid
 graph TD
-    A[Input Video / Frames] --> B[Detection (YOLOv8)]
-    B --> C[Tracking (DeepSORT)]
-    C --> D[Crop Objects by ID]
-    D --> E[Classification (ResNet18)]
-    E --> F[Overlay Labels on Frame]
-    F --> G[Save Video + Frames]
-    G --> H[Feedback UI]
-    H --> I[Feedback Log]
-    I --> J[Retrain Script]
+    A[Input Video] --> B[Tracking + Detection (YOLOv8 + DeepSORT)]
+    B --> C[Frame-wise Classification (ResNet18)]
+    C --> D[Log Results (CSV + PKL)]
+    D --> E[Feedback UI (Streamlit)]
+    E --> F[Feedback Data]
+    F --> G[Retraining Script]
 ```
 
 ---
 
-## 📁 Directory Structure
+## 📁 Directory Overview
 
 ```
 .
+├── app.py                         # Streamlit app for feedback
 ├── data/
-│   ├── raw/                         # Raw video + dataset
-│   ├── processed/
-│   │   ├── tracking/               # Tracked frames, crops, result.csv
-│   │   ├── feedback.csv            # Feedback from user
-│   │   ├── output_video.mp4        # Final labeled video
-├── models/
-│   ├── detection/best.pt           # YOLOv8 trained model
-│   ├── classification/resnet18.pt # Classifier model
-├── notebooks/                      # Colab training notebooks
-├── src/                            # Source code
-│   ├── detection.py
-│   ├── tracking.py
-│   ├── classify.py
-│   ├── extract_frames.py
-│   ├── feedback_ui.py
-│   ├── retrain.py
-├── app.py                          # Streamlit app for feedback
-├── requirements.txt
+│   ├── raw/                       # Input video, frames, dataset
+│   ├── processed/tracking/       # Tracking & classification logs
+│   ├── feedback/                 # JSON + Pickle feedback data
+│   └── retrain/                  # Data for retraining classifiers/detectors
+├── models/                       # Saved models
+│   ├── detection/best.pt
+│   └── classification/resnet18_dispatch.pt
+├── notebooks/                    # Colab notebooks for training & inference
+│   ├── tracking_on_colab.ipynb
+│   ├── train_classifier_colab.ipynb
+│   └── train_yolov8_colab.ipynb
+├── scripts/                      # Pipeline helper scripts
+├── src/
+│   ├── tracking.py               # Runs YOLO + DeepSORT tracking
+│   ├── classify.py               # Applies classification to tracked objects
+│   ├── retrain.py                # Fine-tunes model from feedback
+│   └── feedback_ui/             # Streamlit UI logic
+├── docker-compose.yaml          # Orchestrates app + mlflow services
+├── Dockerfile.app               # Build file for Streamlit app
+├── Dockerfile.mlflow            # Build file for MLflow server
+├── mlruns/, mlartifacts/        # MLflow tracking and artifacts
+├── requirements.txt, environment.yaml
 └── README.md
 ```
 
 ---
 
-## 📚 Model Training
+## 🛠️ How to Run (Local)
 
-### 1. Train YOLOv8 (on Colab)
-
-```python
-from ultralytics import YOLO
-model = YOLO('yolov8n.pt')
-model.train(data='dataset.yaml', epochs=100, imgsz=640, batch=16, name='yolov8n_dispatch')
-```
-
-### 2. Train ResNet18 Classifier
-
-```python
-# Colab notebook: train_classifier_colab.ipynb
-# Logs model + metrics to MLflow
-```
-
----
-
-## 🛠️ Usage
-
-### 1. Extract frames
-
+### 1. Run tracking + classification on a video
 ```bash
-python src/extract_frames.py
+python src/tracking.py        # Output: bbox_tracking_log.pkl
+python src/classify.py        # Output: classification_result.csv, ui_objects.pkl
 ```
 
-### 2. Run detection + tracking
-
-```bash
-python src/tracking.py
-```
-
-### 3. Run classification
-
-```bash
-python src/classify.py
-```
-
-### 4. Launch Feedback UI
-
+### 2. Launch feedback UI
 ```bash
 streamlit run app.py
 ```
 
-### 5. Retrain from feedback (optional)
-
+### 3. Retrain classifier with feedback
 ```bash
 python src/retrain.py
 ```
 
 ---
 
-## 📊 Output Files
+## 🐳 Run with Docker
 
-| Step            | Output Path                                         |
-| --------------- | --------------------------------------------------- |
-| Frames w/ label | `data/processed/tracking/frames_with_id/`           |
-| Cropped objects | `data/processed/tracking/crops/`                    |
+### 1. Build and run services
+```bash
+docker-compose up --build
+```
+
+### 2. Access services
+- Streamlit UI: [http://localhost:8501](http://localhost:8501)
+- MLflow UI: [http://localhost:5000](http://localhost:5000)
+
+> Make sure `models/`, `data/`, `src/`, `scripts/` are all in project root.
+
+---
+
+## 📤 Outputs
+
+| Step            | Output File/Path                                |
+|----------------|--------------------------------------------------|
+| Tracking Log    | `data/processed/tracking/bbox_tracking_log.pkl` |
 | Classification  | `data/processed/tracking/classification_result.csv` |
-| Feedback        | `data/processed/feedback.csv`                       |
-| Final video     | `data/processed/output_video.mp4`                   |
+| UI Objects Log  | `data/processed/tracking/ui_objects.pkl`         |
+| User Feedback   | `data/feedback/feedback.pkl` or `.json`          |
+| Retrain Artifacts | `data/retrain/classifier/`                     |
 
 ---
 
-## 🔍 MLflow Tracking
+## 📊 MLflow Runs
 
-| Run Name                  | Description                  |
-| ------------------------- | ---------------------------- |
-| `yolov8_detection_v1`     | YOLOv8 model + metrics       |
-| `resnet18_classification` | ResNet18 training & accuracy |
-| `relog_yolov8n`           | Relogged model from Colab    |
-
----
-
-## 📖 Feedback Loop (Bonus)
-
-* Giao diện người dùng (`Streamlit`) cho phép chọn `track_id` và sửa nhãn
-* Feedback được lưu vào `feedback.csv`
-* Script retrain sẽ dùng các sample này để fine-tune lại mô hình phân loại
+| Model                     | Run Name / Folder                  |
+|---------------------------|------------------------------------|
+| YOLOv8 Detection          | `runs/detect/yolov8n_dispatch_colab`|
+| ResNet18 Classification  | `runs/classify/resnet18_dispatch.pt`|
+| Feedback Retrain          | Tracked in `mlruns/`, `mlartifacts/`
 
 ---
 
-## 💼 Author
+## 👤 Author
 
-Nguyen Quang Trieu
+**Nguyen Quang Trieu**  
 MLOps Enthusiast | AI Learner | Senior Rigging Artist | Former Physics Teacher
-
