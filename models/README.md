@@ -4,6 +4,7 @@ Thư mục này chứa các checkpoint mô hình đã huấn luyện hoặc mô 
 
 ## ✅ Nội dung đề xuất
 
+Drive:  https://drive.google.com/drive/folders/1VzdAQCtIqIBQLm9jNwmiUvHgeifYPogA?usp=sharing
 - `best.pt`: mô hình YOLOv8 tốt nhất sau training
 - `model_classification.pt`: mô hình classification cho dish/tray
 
