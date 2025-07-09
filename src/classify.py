@@ -1,15 +1,36 @@
-# Classification model logic
+import cv2
 import torch
+import pickle
+import argparse
+from pathlib import Path
 from torchvision import models, transforms
 from PIL import Image
 import pandas as pd
-from pathlib import Path
 
+# CLI arguments
+parser = argparse.ArgumentParser(description="Run classification on tracked objects in video.")
+parser.add_argument("--video_path", type=str, required=True, help="Path to input video")
+args = parser.parse_args()
+video_path = args.video_path
+
+# Paths
+bbox_log_path = Path("data/processed/tracking/logs/bbox_tracking_log.pkl")
+output_csv = Path("data/processed/tracking/logs/classification_result.csv")
+ui_objects_path = Path("data/processed/tracking/logs/ui_objects.pkl")
+
+# Load model
 model = models.resnet18(pretrained=False, num_classes=6)
 state_dict = torch.load("models/classification/resnet18_dispatch.pt", map_location="cpu")
 model.load_state_dict(state_dict)
 model.eval()
 
+# Transform
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+])
+
+# Mapping class ID to label
 id_to_class = {
     0: 'dish_empty',
     1: 'dish_kakigori',
@@ -19,32 +40,60 @@ id_to_class = {
     5: 'tray_not_empty'
 }
 
-crop_dir = Path("data/processed/tracking/crops")
-output_csv = Path("data/processed/tracking/classification_result.csv")
+# Load bbox log
+with open(bbox_log_path, "rb") as f:
+    bbox_data = pickle.load(f)
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-])
+# Open video once
+cap = cv2.VideoCapture(video_path)
 
 results = []
-for cls_folder in crop_dir.iterdir():
-    for track_folder in cls_folder.iterdir():
-        for img_path in track_folder.glob("*.jpg"):
-            image = Image.open(img_path).convert("RGB")
-            input_tensor = transform(image).unsqueeze(0)
-            with torch.no_grad():
-                output = model(input_tensor)
-                pred = torch.argmax(output, dim=1).item()
-                label_name = id_to_class[pred]
-            results.append({
-                "filename": img_path.name,
-                "true_class": cls_folder.name,
-                "track_id": track_folder.name,
-                "predicted": pred,
-                 "predicted_label": label_name 
-            })
+ui_data = {}
 
+for frame_idx, objs in bbox_data.items():
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    success, frame = cap.read()
+    if not success:
+        print(f"[!] Cannot read frame {frame_idx}")
+        continue
+
+    ui_data[frame_idx] = []
+    for obj in objs:
+        cls = obj["object"]
+        track_id = obj["id"]
+        x, y, w, h = obj["bbox"]
+        crop = frame[y:y+h, x:x+w]
+
+        if crop.size == 0:
+            continue
+
+        crop_pil = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+        input_tensor = transform(crop_pil).unsqueeze(0)
+        with torch.no_grad():
+            output = model(input_tensor)
+            pred = torch.argmax(output, dim=1).item()
+            label_name = id_to_class[pred]
+
+        ui_data[frame_idx].append({
+            "id": track_id,
+            "object": cls,
+            "status": label_name.split("_")[1],
+            "bbox": obj["bbox"]
+        })
+
+        results.append({
+            "frame": frame_idx,
+            "track_id": track_id,
+            "object": cls,
+            "predicted": pred,
+            "predicted_label": label_name
+        })
+
+cap.release()
+
+# Save results
 pd.DataFrame(results).to_csv(output_csv, index=False)
-print("✅ Classification done. Saved to:", output_csv)
+with open(ui_objects_path, "wb") as f:
+    pickle.dump(ui_data, f)
 
+print("✅ Classification done. Logs saved to:", output_csv, "and", ui_objects_path)

@@ -1,1 +1,0 @@
-# Object detection logic (YOLOv8)
