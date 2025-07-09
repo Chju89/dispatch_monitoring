@@ -6,6 +6,7 @@ from pathlib import Path
 from torchvision import models, transforms
 from PIL import Image
 import pandas as pd
+import torch.nn.functional as F
 
 # CLI arguments
 parser = argparse.ArgumentParser(description="Run classification on tracked objects in video.")
@@ -18,10 +19,14 @@ bbox_log_path = Path("data/processed/tracking/logs/bbox_tracking_log.pkl")
 output_csv = Path("data/processed/tracking/logs/classification_result.csv")
 ui_objects_path = Path("data/processed/tracking/logs/ui_objects.pkl")
 
+# Device (GPU if available)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Load model
 model = models.resnet18(pretrained=False, num_classes=6)
-state_dict = torch.load("models/classification/resnet18_dispatch.pt", map_location="cpu")
+state_dict = torch.load("models/classification/resnet18_dispatch.pt", map_location=device)
 model.load_state_dict(state_dict)
+model.to(device)
 model.eval()
 
 # Transform
@@ -57,28 +62,39 @@ for frame_idx, objs in bbox_data.items():
         print(f"[!] Cannot read frame {frame_idx}")
         continue
 
+    height, width = frame.shape[:2]
     ui_data[frame_idx] = []
     for obj in objs:
         cls = obj["object"]
         track_id = obj["id"]
         x, y, w, h = obj["bbox"]
-        crop = frame[y:y+h, x:x+w]
 
+        # Clip bbox to frame size
+        x = max(0, x)
+        y = max(0, y)
+        x2 = min(x + w, width)
+        y2 = min(y + h, height)
+
+        crop = frame[y:y2, x:x2]
         if crop.size == 0:
             continue
 
         crop_pil = Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
-        input_tensor = transform(crop_pil).unsqueeze(0)
+        input_tensor = transform(crop_pil).unsqueeze(0).to(device)
+
         with torch.no_grad():
             output = model(input_tensor)
-            pred = torch.argmax(output, dim=1).item()
+            prob = F.softmax(output, dim=1)
+            pred = torch.argmax(prob, dim=1).item()
+            confidence = prob[0][pred].item()
             label_name = id_to_class[pred]
 
         ui_data[frame_idx].append({
             "id": track_id,
             "object": cls,
             "status": label_name.split("_")[1],
-            "bbox": obj["bbox"]
+            "bbox": obj["bbox"],
+            "confidence": round(confidence, 4)
         })
 
         results.append({
@@ -86,7 +102,8 @@ for frame_idx, objs in bbox_data.items():
             "track_id": track_id,
             "object": cls,
             "predicted": pred,
-            "predicted_label": label_name
+            "predicted_label": label_name,
+            "confidence": round(confidence, 4)
         })
 
 cap.release()
@@ -96,4 +113,4 @@ pd.DataFrame(results).to_csv(output_csv, index=False)
 with open(ui_objects_path, "wb") as f:
     pickle.dump(ui_data, f)
 
-print("✅ Classification done. Logs saved to:", output_csv, "and", ui_objects_path)
+print("\u2705 Classification done. Logs saved to:", output_csv, "and", ui_objects_path)

@@ -6,7 +6,7 @@ import cv2
 # ----------------------------
 # Config
 # ----------------------------
-VIDEO_PATH = "data/raw/1473_CH05_20250501133703_154216.mp4"
+VIDEO_PATH = "data/raw/video_shortened.mp4"
 FEEDBACK_FILE = Path("data/feedback") / f"feedback_{Path(VIDEO_PATH).stem}.json"
 RETRAIN_DIR = Path("data/retrain")
 CLS_SIZE = 224
