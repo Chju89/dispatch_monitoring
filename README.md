@@ -99,6 +99,12 @@ docker-compose up --build
 
 > Make sure `models/`, `data/`, `src/`, `scripts/` are all in project root.
 
+
+### 3. Stop Docker
+```bash
+docker-compose down --volumes --remove-orphans
+docker image prune -f
+```
 ---
 
 ## 📤 Outputs
