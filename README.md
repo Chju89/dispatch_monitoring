@@ -1,135 +1,131 @@
-# 🚚 Dispatch Monitoring System
+# 🚚 Dispatch Monitoring System (Realtime Version)
 
-An end-to-end MLOps pipeline to monitor the kitchen dispatch area by detecting, tracking, and classifying dishes and trays directly on video. Integrated feedback loop enables continuous improvement of the classification model.
+A production-ready, **real-time monitoring system** for kitchen dispatch areas using object detection, tracking, and classification directly on video. Includes feedback loop, model retraining, and full MLOps integration with **MLflow**.
 
 ---
 
 ## 🌟 Features
 
-- 🧠 **Object Detection**: YOLOv8-based custom model
-- 🛰️ **Object Tracking**: DeepSORT to maintain consistent IDs across frames
-- 🧪 **Classification**: ResNet18 for classifying dishes/trays into:
-  - `dish/empty`, `dish/not_empty`, `dish/kakigori`
-  - `tray/empty`, `tray/not_empty`, `tray/kakigori`
-- 📋 **Frame-level Logging**: Results saved in structured `.pkl`/`.csv` for later use
-- 🖼️ **Feedback UI**: Interactive Streamlit interface for reviewing and correcting model predictions
-- 🔁 **Retraining Pipeline**: Leverages user feedback to fine-tune classifier
-- 📊 **MLflow Integration**: Logs training runs, artifacts, and metrics for all models
-- 🐳 **Dockerized**: Easily deploy app and MLflow with Docker Compose
+- 🧠 **Object Detection**: YOLOv8 custom model (e.g., `yolov8m_dispatch_colab`)
+- 🛰️ **Object Tracking**: DeepSORT with consistent tracking IDs
+- 🧪 **Classification**: ResNet18 classifier with 6 dish/tray states:
+  - `dish_empty`, `dish_not_empty`, `dish_kakigori`  
+  - `tray_empty`, `tray_not_empty`, `tray_kakigori`
+- 🎯 **Realtime Inference**: End-to-end processing per video frame
+- 🧾 **Interactive Feedback**:
+  - View frame-by-frame detection results
+  - Delete any incorrect object by ID
+  - Adjust classification via dropdowns
+- 🔁 **Feedback Loop**: Persist changes to JSON and enable retraining
+- 📊 **MLflow Integration**: Tracks model training, evaluation, metrics & artifacts
+- 🐳 **Dockerized Deployment**: Fully containerized with Docker Compose
 
 ---
 
-## 🔄 Pipeline Overview (Updated)
+## 🔄 Pipeline Overview
 
 ```mermaid
 graph TD
-    A[Input Video] --> B[Tracking + Detection (YOLOv8 + DeepSORT)]
-    B --> C[Frame-wise Classification (ResNet18)]
-    C --> D[Log Results (CSV + PKL)]
+    A[Input Video (mp4)] --> B[Detection + Tracking (YOLOv8 + DeepSORT)]
+    B --> C[Realtime Classification (ResNet18)]
+    C --> D[Draw & Show Bounding Boxes]
     D --> E[Feedback UI (Streamlit)]
-    E --> F[Feedback Data]
-    F --> G[Retraining Script]
+    E --> F[Export to Feedback Logs (JSON)]
+    F --> G[Retraining (optional)]
 ```
 
 ---
 
-## 📁 Directory Overview
+## 📁 Directory Structure
 
 ```
 .
-├── app.py                         # Streamlit app for feedback
+├── app.py                         # Streamlit app (now real-time)
+├── models/                        # Trained models
+│   ├── detection/best.pt          # YOLOv8 model
+│   └── classification/resnet18_dispatch.pt  # Full ResNet model
 ├── data/
-│   ├── raw/                       # Input video, frames, dataset
-│   ├── processed/tracking/       # Tracking & classification logs
-│   ├── feedback/                 # JSON + Pickle feedback data
-│   └── retrain/                  # Data for retraining classifiers/detectors
-├── models/                       # Saved models
-│   ├── detection/best.pt
-│   └── classification/resnet18_dispatch.pt
-├── notebooks/                    # Colab notebooks for training & inference
-│   ├── tracking_on_colab.ipynb
+│   ├── raw/video_shortened.mp4    # Input video
+│   └── feedback/                  # User feedback in JSON
+├── src/
+│   ├── tracking.py                # (legacy) tracking script
+│   ├── classify.py                # (legacy) classification script
+│   ├── retrain.py                 # Classifier retraining using feedback
+├── notebooks/
 │   ├── train_classifier_colab.ipynb
 │   └── train_yolov8_colab.ipynb
-├── scripts/                      # Pipeline helper scripts
-├── src/
-│   ├── tracking.py               # Runs YOLO + DeepSORT tracking
-│   ├── classify.py               # Applies classification to tracked objects
-│   ├── retrain.py                # Fine-tunes model from feedback
-│   └── feedback_ui/             # Streamlit UI logic
-├── docker-compose.yaml          # Orchestrates app + mlflow services
-├── Dockerfile.app               # Build file for Streamlit app
-├── Dockerfile.mlflow            # Build file for MLflow server
-├── mlruns/, mlartifacts/        # MLflow tracking and artifacts
 ├── requirements.txt, environment.yaml
+├── docker-compose.yaml
+├── Dockerfile.app, Dockerfile.mlflow
 └── README.md
 ```
 
 ---
 
-## 🛠️ How to Run (Local)
+## 🚀 Run Locally
 
-### 1. Run tracking + classification on a video
-```bash
-python src/tracking.py        # Output: bbox_tracking_log.pkl
-python src/classify.py        # Output: classification_result.csv, ui_objects.pkl
-```
-
-### 2. Launch feedback UI
+### 1. Run the App
 ```bash
 streamlit run app.py
 ```
 
-### 3. Retrain classifier with feedback
+### 2. Provide Video Input
+- Drop your video in `data/raw/video_shortened.mp4` (or change path in code)
+
+### 3. Classify Frame-by-Frame
+- Realtime detection + classification
+- Delete wrong objects, correct status via dropdown
+- Press **"Apply Change"** to log your feedback
+
+---
+
+## 🧪 Retraining
+
+After collecting enough feedback:
+
 ```bash
 python src/retrain.py
 ```
+
+> Your corrected feedback is saved in `data/feedback/*.json`, and can be used to update the classifier.
+
+---
+
+## 🧠 MLflow Integration
+
+- Automatically logs model params, metrics, and artifacts
+- URLs:
+  - Streamlit UI: http://localhost:8501
+  - MLflow UI: http://localhost:5000
 
 ---
 
 ## 🐳 Run with Docker
 
-### 1. Build and run services
 ```bash
 docker-compose up --build
 ```
 
-### 2. Access services
-- Streamlit UI: [http://localhost:8501](http://localhost:8501)
-- MLflow UI: [http://localhost:5000](http://localhost:5000)
-
-> Make sure `models/`, `data/`, `src/`, `scripts/` are all in project root.
-
-
-### 3. Stop Docker
+To stop:
 ```bash
 docker-compose down --volumes --remove-orphans
-docker image prune -f
 ```
----
-
-## 📤 Outputs
-
-| Step            | Output File/Path                                |
-|----------------|--------------------------------------------------|
-| Tracking Log    | `data/processed/tracking/bbox_tracking_log.pkl` |
-| Classification  | `data/processed/tracking/classification_result.csv` |
-| UI Objects Log  | `data/processed/tracking/ui_objects.pkl`         |
-| User Feedback   | `data/feedback/feedback.pkl` or `.json`          |
-| Retrain Artifacts | `data/retrain/classifier/`                     |
 
 ---
 
-## 📊 MLflow Runs
+## 📤 Output Artifacts
 
-| Model                     | Run Name / Folder                  |
-|---------------------------|------------------------------------|
-| YOLOv8 Detection          | `runs/detect/yolov8n_dispatch_colab`|
-| ResNet18 Classification  | `runs/classify/resnet18_dispatch.pt`|
-| Feedback Retrain          | Tracked in `mlruns/`, `mlartifacts/`
+| Step                | Output File                          |
+|---------------------|--------------------------------------|
+| Realtime Feedback   | `data/feedback/*.json`               |
+| Trained Classifier  | `models/classification/resnet18_dispatch.pt` |
+| Trained Detector    | `models/detection/best.pt`           |
+| MLflow Artifacts    | `mlruns/`, `mlartifacts/`            |
 
 ---
 
 ## 👤 Author
 
 **Nguyen Quang Trieu**  
-MLOps Enthusiast | AI Learner | Senior Rigging Artist | Former Physics Teacher
+MLOps Enthusiast | AI Learner | Senior Rigging Artist  
+📫 [quangtrieu.sp@gmail.com](mailto:quangtrieu.sp@gmail.com)
