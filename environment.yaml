@@ -20,4 +20,6 @@ dependencies:
       - mlflow==2.13.0             # Model tracking
       - tqdm
       - seaborn
+      - onnxruntime>=1.15.1
+
 

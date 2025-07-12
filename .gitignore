@@ -12,11 +12,6 @@ data/processed/
 data/feedback/*.csv
 data/feedback/*.json
 
-# Models
-models/*.pt
-models/*.pth
-models/*.onnx
-
 # Environment files
 .env
 *.env
