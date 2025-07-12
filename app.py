@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 # ------------------------ Config ------------------------
-VIDEO_PATH = Path("data/raw/video_shortened.mp4")
+VIDEO_PATH = Path("data/raw/video_middle.mp4")
 FEEDBACK_LOG_PATH = Path("data/feedback/")
 object_types = ["dish", "tray"]
 status_types = ["empty", "not_empty", "kakigori"]
@@ -105,12 +105,12 @@ def draw_bboxes(image, objects):
         color = bbox_colors.get(obj["object"], "blue")
         draw.rectangle([x, y, x + w, y + h], outline=color, width=3)
         label = f"ID:{obj['id']} {obj['object']}_{obj['status']}"
-        draw.text((x, y), label, fill=color)
+        draw.text((x, y-20), label, fill=color, stroke_width=5, stroke_fill='white', spacing=5, bool=True)
     return img
 
 def track_and_classify(frame_rgb, yolo_model, tracker, classifier):
     # 1. YOLOv8 detection
-    results = yolo_model.predict(frame_rgb, imgsz=640, conf=0.005, verbose=False)[0]
+    results = yolo_model.predict(frame_rgb, imgsz=1088, conf=0.15, verbose=False)[0]
     detections = []
 
     for box in results.boxes:
@@ -161,7 +161,7 @@ def track_and_classify(frame_rgb, yolo_model, tracker, classifier):
             "bbox": [x1, y1, x2 - x1, y2 - y1]
         })
 
-    return objects, (frame_rgb.shape)
+    return objects
 
 
 
@@ -227,12 +227,10 @@ if frame_rgb is None:
     st.stop()
 
 # ------------------------ Inference ------------------------
-objects, resault = track_and_classify(frame_rgb, yolo_model, tracker, classifier)
+objects = track_and_classify(frame_rgb, yolo_model, tracker, classifier)
 
 # Apply deletion filter
 objects = [obj for obj in objects if obj["id"] not in st.session_state.deleted_ids]
-
-st.success(resault)
 
 # ------------------------ Layout -----------------------
 # Layout 1 -2
@@ -245,6 +243,8 @@ with col2:
     updated_objects = []
 
     for i, obj in enumerate(objects):
+
+        st.markdown("---")
         cols = st.columns([1, 2, 2])
 
         with cols[0]:
