@@ -101,7 +101,13 @@ python src/retrain.py
 ---
 
 ## 🐳 Run with Docker
-
+To Clone
+```bash
+mkdir test_repo && cd test_repo
+git clone https://github.com/Chju89/dispatch_monitoring.git
+cd dispatch_monitoring
+```
+To run:
 ```bash
 docker-compose up --build
 ```

@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 # ------------------------ Config ------------------------
-VIDEO_PATH = Path("data/raw/video_middle.mp4")
+VIDEO_PATH = Path("data/raw/sample_video.mp4")
 FEEDBACK_LOG_PATH = Path("data/feedback/")
 object_types = ["dish", "tray"]
 status_types = ["empty", "not_empty", "kakigori"]

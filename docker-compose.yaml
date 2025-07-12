@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile.app
     container_name: dispatch_app
     ports:
-      - "8501:8501"  # Streamlit UI
+      - "8501:8501"
     volumes:
       - ./data:/app/data
       - ./models:/app/models
@@ -15,8 +15,10 @@ services:
       - ./scripts:/app/scripts
     environment:
       - PYTHONUNBUFFERED=1
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
     depends_on:
       - mlflow
+    restart: unless-stopped
 
   mlflow:
     build:
@@ -37,4 +39,5 @@ services:
       "--host", "0.0.0.0",
       "--port", "5000"
     ]
+    restart: unless-stopped
 
