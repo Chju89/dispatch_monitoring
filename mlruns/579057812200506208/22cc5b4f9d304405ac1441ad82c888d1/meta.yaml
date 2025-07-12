@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/579057812200506208/22cc5b4f9d304405ac1441ad82c888d1/artifacts
+end_time: 1752292991363
+entry_point_name: ''
+experiment_id: '579057812200506208'
+lifecycle_stage: active
+run_id: 22cc5b4f9d304405ac1441ad82c888d1
+run_name: yolov8n_dispatch_highres
+run_uuid: 22cc5b4f9d304405ac1441ad82c888d1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1752292919623
+status: 4
+tags: []
+user_id: root

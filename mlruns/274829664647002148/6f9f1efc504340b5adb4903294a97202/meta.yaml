@@ -1,0 +1,16 @@
+artifact_uri: mlflow-artifacts:/274829664647002148/6f9f1efc504340b5adb4903294a97202/artifacts
+deleted_time: 1752205275358
+end_time: null
+entry_point_name: ''
+experiment_id: '274829664647002148'
+lifecycle_stage: deleted
+run_id: 6f9f1efc504340b5adb4903294a97202
+run_name: casual-bee-338
+run_uuid: 6f9f1efc504340b5adb4903294a97202
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1752204961672
+status: 1
+tags: []
+user_id: root

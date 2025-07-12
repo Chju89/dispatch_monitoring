@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/821967220417074436/b48c86c9281a47fa9c8887fe43493057/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '821967220417074436'
+lifecycle_stage: active
+run_id: b48c86c9281a47fa9c8887fe43493057
+run_name: resilient-ox-346
+run_uuid: b48c86c9281a47fa9c8887fe43493057
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1752027546116
+status: 1
+tags: []
+user_id: root

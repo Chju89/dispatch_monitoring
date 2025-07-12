@@ -1,0 +1,15 @@
+artifact_uri: mlflow-artifacts:/772886176333578108/80c75c1d2da0405f92a02b54cd2b20f4/artifacts
+end_time: 1751989609144
+entry_point_name: ''
+experiment_id: '772886176333578108'
+lifecycle_stage: active
+run_id: 80c75c1d2da0405f92a02b54cd2b20f4
+run_name: resnet18_classifier_train
+run_uuid: 80c75c1d2da0405f92a02b54cd2b20f4
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1751989608754
+status: 4
+tags: []
+user_id: root
