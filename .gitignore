@@ -48,3 +48,4 @@ runs/
 data/raw/frames/
 data/raw/*.mp4
 yolov8n.pt
+new_app.py
