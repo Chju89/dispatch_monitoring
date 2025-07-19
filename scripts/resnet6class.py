@@ -43,8 +43,8 @@ transform = transforms.Compose([
 @st.cache_resource
 def load_models():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tray_model = YOLO("runs/detect/tray/yolov8n_aug_2_tray_only_1/weights/best.pt")
-    dish_model = YOLO("runs/detect/dish/yolov8n_aug_2_dish_only_1/weights/best.pt")
+    tray_model = YOLO("models/detection/tray_best.pt")
+    dish_model = YOLO("models/detection/dish_best.pt")
     classifier = torch.load("models/classification/resnet18_dispatch.pt", map_location=device)
     classifier.eval()
     return tray_model, dish_model, classifier, device

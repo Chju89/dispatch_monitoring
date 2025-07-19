@@ -40,8 +40,8 @@ transform = transforms.Compose([
 @st.cache_resource
 def load_models():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tray_model = YOLO("runs/detect/tray/yolov8n_aug_2_tray_only_1/weights/best.pt")
-    dish_model = YOLO("runs/detect/dish/yolov8n_aug_2_dish_only_1/weights/best.pt")
+    tray_model = YOLO("models/detection/tray_best.pt")
+    dish_model = YOLO("models/detection/dish_best.pt")
     classifier = torch.load("models/classification/resnet18_dispatch_3class.pt", map_location=device)
     classifier.eval()
     return tray_model, dish_model, classifier, device
@@ -100,8 +100,6 @@ if video_file:
     tray_preds = tray_model.predict(source=resized, conf=0.05, iou=0.35, imgsz=1088, verbose=False)[0].boxes.data.tolist()
     dish_preds = dish_model.predict(source=resized, conf=0.05, iou=0.35, imgsz=1088, verbose=False)[0].boxes.data.tolist()
     boxes = tray_preds + dish_preds
-
-    st.write(f"YOLO detect: tray={len(tray_preds)}, dish={len(dish_preds)}")
 
     detections = []
     for box in boxes:
