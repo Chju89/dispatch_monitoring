@@ -1,48 +1,69 @@
 import cv2
 from ultralytics import YOLO
-from pathlib import Path
 
-# Load mô hình YOLO đã train
-model = YOLO("models/detection/best.pt")
-print(f"[INFO] Class names in model: {model.names}")
+# === Config ===
+dish_model_path = "runs/detect/dish/yolov8n_aug_2_dish_only_1/weights/best.pt"
+tray_model_path = "runs/detect/tray/yolov8n_aug_2_tray_only_1/weights/best.pt"
+video_path = "data/raw/sample_video.mp4"
+output_path = "data/raw/output_dish_tray_result.mp4"
 
-# Lấy ảnh test đầu tiên từ thư mục
-img_path = sorted(Path("data/raw/frames").glob("*.jpg"))[10]
-img_original = cv2.imread(str(img_path))
+tray_conf_thresh = 0.08
+tray_iou_thresh = 0.45
+dish_conf_thresh = 0.05
+dish_iou_thresh = 0.35
+imgsz = 1088
 
-# Resize ảnh về kích thước đúng khi train
-img_resized = cv2.resize(img_original, (640, 640))
+# === Load models ===
+dish_model = YOLO(dish_model_path)
+tray_model = YOLO(tray_model_path)
 
-# Dự đoán trên ảnh resized
-results = model.predict(source=img_resized, imgsz=640, conf=0.05, verbose=False)[0]
+# === Load video ===
+cap = cv2.VideoCapture(video_path)
+w, h = int(cap.get(3)), int(cap.get(4))
+fps = cap.get(cv2.CAP_PROP_FPS)
 
-# Tính hệ số scale ngược để đưa bbox về ảnh gốc
-orig_h, orig_w = img_original.shape[:2]
-scale_x = orig_w / 640
-scale_y = orig_h / 640
+# === Output writer ===
+out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
 
-classes_detected = set()
-for box in results.boxes:
-    x1, y1, x2, y2 = box.xyxy[0]
-    cls_id = int(box.cls[0])
-    cls_name = model.names[cls_id]
-    classes_detected.add(cls_name)
+# === Colors ===
+color_dish = (0, 255, 0)   # Green
+color_tray = (0, 0, 255)   # Red
 
-    # Scale bbox về kích thước gốc
-    x1 = int(x1 * scale_x)
-    y1 = int(y1 * scale_y)
-    x2 = int(x2 * scale_x)
-    y2 = int(y2 * scale_y)
+# === Inference loop ===
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-    # Vẽ lên ảnh gốc
-    cv2.rectangle(img_original, (x1, y1), (x2, y2), (255, 0, 0), 2)
-    cv2.putText(img_original, cls_name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+    # === Inference ===
+    dish_results = dish_model.predict(source=frame, conf=dish_conf_thresh, iou=dish_iou_thresh, imgsz=imgsz, verbose=False)
+    tray_results = tray_model.predict(source=frame, conf=tray_conf_thresh, iou=tray_iou_thresh, imgsz=imgsz, verbose=False)
 
-print(f"[INFO] Found {len(results.boxes)} boxes")
-print(f"[INFO] Classes detected: {classes_detected}")
+    # === Draw dish ===
+    for box in dish_results[0].boxes:
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        conf = float(box.conf[0])
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color_dish, 2)
+        cv2.putText(frame, f'dish {conf:.2f}', (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_dish, 2)
 
-# Hiển thị ảnh kết quả
-cv2.imshow("YOLO Detection (scaled)", img_original)
-cv2.waitKey(0)
+    # === Draw tray ===
+    for box in tray_results[0].boxes:
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+        conf = float(box.conf[0])
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color_tray, 2)
+        cv2.putText(frame, f'tray {conf:.2f}', (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_tray, 2)
+
+    # === Display and save ===
+    cv2.imshow("YOLOv8 - dish + tray", frame)
+    out.write(frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# === Cleanup ===
+cap.release()
+out.release()
 cv2.destroyAllWindows()
 

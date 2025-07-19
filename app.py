@@ -1,245 +1,205 @@
-import cv2
 import streamlit as st
 import torch
-import torchvision.transforms as T
+import cv2
+import time
 import numpy as np
+from torchvision import transforms
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
-from PIL import Image, ImageDraw
-import time
+from PIL import Image
 import json
 from pathlib import Path
 import tempfile
 
 # --------------------- Setup ---------------------
 st.set_page_config(layout="wide")
-st.title("📦 Dispatch Monitoring - Realtime Inference")
+st.title("🏎️ Dispatch Monitoring - Realtime Inference")
 
 object_types = ["dish", "tray"]
 status_types = ["empty", "not_empty", "kakigori"]
 bbox_colors = {"dish": "green", "tray": "red"}
-
-label_map = {
-    0: 'dish_empty',
-    1: 'dish_kakigori',
-    2: 'dish_not_empty',
-    3: 'tray_empty',
-    4: 'tray_kakigori',
-    5: 'tray_not_empty'
+color_map = {
+    "green": (0, 255, 0),
+    "red": (0, 0, 255),
+    "blue": (255, 0, 0),
 }
 
-transform_cls = T.Compose([
-    T.Resize((224, 224)),
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+label_map = {
+    0: 'empty',
+    1: 'kakigori',
+    2: 'not_empty'
+}
+
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225])
 ])
 
 @st.cache_resource
 def load_models():
-    # yolo = YOLO("yolov8s.pt")
-    yolo = YOLO("models/detection/best.pt")
-    resnet = torch.load("models/classification/resnet18_dispatch.pt", map_location="cpu")
-    resnet.eval()
-    return yolo, resnet
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tray_model = YOLO("runs/detect/tray/yolov8n_aug_2_tray_only_1/weights/best.pt")
+    dish_model = YOLO("runs/detect/dish/yolov8n_aug_2_dish_only_1/weights/best.pt")
+    classifier = torch.load("models/classification/resnet18_dispatch_3class.pt", map_location=device)
+    classifier.eval()
+    return tray_model, dish_model, classifier, device
 
 @st.cache_resource
 def init_tracker():
-    return DeepSort(max_age=15)
+    return DeepSort(max_age=10)
 
-# --------------------- Video Upload ---------------------
-video_file = st.file_uploader("🎬 Chọn video để phân tích", type=["mp4", "avi"])
+@st.cache_resource
+def get_video_capture(path):
+    return cv2.VideoCapture(path)
+
+video_file = st.file_uploader("🎮 Chọn video để phân tích", type=["mp4", "avi"])
+
 if video_file:
     tmp_path = tempfile.NamedTemporaryFile(delete=False)
     tmp_path.write(video_file.read())
-    VIDEO_PATH = Path(tmp_path.name)
+    VIDEO_PATH = tmp_path.name
 
-    yolo_model, classifier = load_models()
+    tray_model, dish_model, classifier, device = load_models()
     tracker = init_tracker()
+    cap = get_video_capture(VIDEO_PATH)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    delay = 1.0 / fps if fps > 0 else 0.03
 
-    # --------------------- State init ---------------------
+    if "is_playing" not in st.session_state:
+        st.session_state.is_playing = False
     if "frame_idx" not in st.session_state:
         st.session_state.frame_idx = 0
     if "deleted_ids" not in st.session_state:
         st.session_state.deleted_ids = set()
-    if "playing" not in st.session_state:
-        st.session_state.playing = False
-    if "playback_speed" not in st.session_state:
-        st.session_state.playback_speed = 1.0
 
-    # --------------------- Read frame ---------------------
-    def read_frame_from_video(frame_index):
-        cap = cv2.VideoCapture(str(VIDEO_PATH))
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-        ret, frame = cap.read()
-        cap.release()
-        if not ret:
-            return None
-        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    def track_and_classify(frame, yolo_model, tracker, classifier):
-        results = yolo_model.predict(source=frame, conf=0.1, iou=0.35, imgsz=640, verbose=False)
-        boxes = results[0].boxes
-        detections = []
-
-        for box in boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = float(box.conf[0])
-            obj_crop = frame[y1:y2, x1:x2]
-            try:
-                img_pil = Image.fromarray(obj_crop)
-                input_tensor = transform_cls(img_pil).unsqueeze(0)
-                with torch.no_grad():
-                    output = classifier(input_tensor)
-                    cls_idx = torch.argmax(output, dim=1).item()
-                    label = label_map[cls_idx]
-            except:
-                label = "unknown"
-            detections.append(([x1, y1, x2 - x1, y2 - y1], conf, label))
-
-        tracks = tracker.update_tracks(detections, frame=frame)
-        objects = []
-        for track in tracks:
-            if not track.is_confirmed():
-                continue
-            tid = track.track_id
-            l, t, r, b = map(int, track.to_ltrb())
-            obj = track.get_det_class()
-
-            parts = obj.split("_")
-            if len(parts) == 2:
-                obj_type, status = parts
-            else:
-                obj_type, status = "unknown", "unknown"
-
-            objects.append({
-                "id": tid,
-                "bbox": [l, t, r, b],
-                "object": obj_type,
-                "status": status
-            })
-        return objects
-
-    def draw_bboxes(image, objects):
-        img = Image.fromarray(image).copy()
-        draw = ImageDraw.Draw(img)
-        for obj in objects:
-            if obj['object'] == "unknown":
-                continue
-            x, y, w, h = obj["bbox"]
-            color = bbox_colors.get(obj["object"], "blue")
-            draw.rectangle([x, y, w, h], outline=color, width=3)
-            label = f"ID:{obj['id']} {obj['object']}_{obj['status']}"
-            draw.text((x, y-20), label, fill=color, stroke_width=5, stroke_fill='white', spacing=5, bool=True)
-        return img
-
-    def apply_feedback(objects, frame_name):
-        log_path = Path(f"data/feedback/{video_file.name}_feedback.json")
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        new_entries = [{
-            "object_id": obj["id"],
-            "frame": frame_name,
-            "new_object": obj["object"],
-            "new_status": obj["status"],
-            "bbox": obj["bbox"]
-        } for obj in objects]
-
-        # Đọc log cũ an toàn
-        try:
-            with open(log_path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            existing = []
-
-        appended = 0
-        for entry in new_entries:
-            if entry not in existing:
-                existing.append(entry)
-                appended += 1
-
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
-
-        if appended:
-            st.success(f"✅ Đã ghi {appended} feedback → `{log_path.name}`")
-        else:
-            st.info("⚠️ Không có thay đổi mới.")
-
-
-
-    cap = cv2.VideoCapture(str(VIDEO_PATH))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
 
-    # ------------------------ UI Layout ------------------------
-    frame_idx = st.session_state.frame_idx
-    frame_rgb = read_frame_from_video(frame_idx)
-    if frame_rgb is None:
-        st.error("❌ Không load được frame.")
+    colA, colB, colC, colD = st.columns([1, 1, 1, 3])
+    if colA.button("⏮️ Lùi lại"):
+        st.session_state.frame_idx = max(0, st.session_state.frame_idx - 30)
+        st.session_state.is_playing = False
+
+    if colB.button("▶️ Play" if not st.session_state.is_playing else "⏸ Pause"):
+        st.session_state.is_playing = not st.session_state.is_playing
+
+    if colC.button("⏭️ Tiếp theo"):
+        st.session_state.frame_idx = min(st.session_state.frame_idx + 1, total_frames - 1)
+        st.session_state.is_playing = False
+
+    cap.set(cv2.CAP_PROP_POS_FRAMES, st.session_state.frame_idx)
+    ret, frame = cap.read()
+    if not ret:
         st.stop()
-        
-    objects = track_and_classify(frame_rgb, yolo_model, tracker, classifier)
-    objects = [obj for obj in objects if obj["id"] not in st.session_state.deleted_ids]
 
-    col1, col2 = st.columns([3, 2])
-    with col1:
-        st.image(draw_bboxes(frame_rgb, objects), caption=f"🖼️ Frame {frame_idx + 1} / {total_frames}", use_column_width=True)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    h, w, _ = frame_rgb.shape
+    resized = cv2.resize(frame_rgb, (w, h))
 
-    with col2:
-        st.markdown(f"### 🧾 Object List – Frame {frame_idx + 1}")
-        updated_objects = []
+    tray_preds = tray_model.predict(source=resized, conf=0.05, iou=0.35, imgsz=1088, verbose=False)[0].boxes.data.tolist()
+    dish_preds = dish_model.predict(source=resized, conf=0.05, iou=0.35, imgsz=1088, verbose=False)[0].boxes.data.tolist()
+    boxes = tray_preds + dish_preds
 
-        for i, obj in enumerate(objects):
-            st.markdown("---")
-            cols = st.columns([1, 2, 2])
+    st.write(f"YOLO detect: tray={len(tray_preds)}, dish={len(dish_preds)}")
 
-            with cols[0]:
-                if st.button("🗑 Xoá", key=f"del_{obj['id']}"):
-                    st.session_state.deleted_ids.add(obj["id"])
-                    st.experimental_rerun()
+    detections = []
+    for box in boxes:
+        x1, y1, x2, y2, conf, cls = map(float, box)
+        x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+        h, w, _ = resized.shape
+        x1, y1, x2, y2 = map(lambda v, m: max(0, min(int(v), m - 1)), [x1, y1, x2, y2], [w, h, w, h])
+        crop = resized[y1:y2, x1:x2]
+        label = "unknown"
+
+        try:
+            pil_img = Image.fromarray(crop)
+            input_tensor = transform(pil_img).unsqueeze(0).to(device)
+            with torch.no_grad():
+                output = classifier(input_tensor)
+                pred_cls = torch.argmax(output, dim=1).item()
+                label = label_map.get(pred_cls, "unknown")
+        except:
+            pass
+        detections.append(([x1, y1, x2 - x1, y2 - y1], conf, label))
+
+    tracks = tracker.update_tracks(detections, frame=resized)
+    objects = []
+    for track in tracks:
+        if not track.is_confirmed():
+            continue
+        tid = track.track_id
+        l, t, r, b = map(int, track.to_ltrb())
+        label = track.get_det_class()
+        if tid in st.session_state.deleted_ids:
+            continue
+        # With 3-class classifier, obj_type is unknown, we assume from detection source
+        obj_type = "dish" if (l + r) // 2 < w // 2 else "tray"
+        status = label
+        objects.append({"id": f"{tid}_{st.session_state.frame_idx}", "bbox": [l, t, r, b], "object": obj_type, "status": status, "label": label})
+        color = color_map.get(bbox_colors.get(obj_type, "green"))
+        cv2.rectangle(resized, (l, t), (r, b), color, 2)
+        cv2.putText(resized, f"ID {tid}: {obj_type}_{label}", (l, t - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+    frame_placeholder = st.empty()
+    with frame_placeholder.container():
+        col1, col2 = st.columns([3, 2], gap="large")
+        with col1:
+            st.image(resized, channels="RGB", use_column_width=True)
+        with col2:
+            st.markdown(f"### 🎯 Danh sách Object - Frame: {st.session_state.frame_idx + 1}")
+            updated_objects = []
+            for i, obj in enumerate(objects):
+                if obj["id"] in st.session_state.deleted_ids:
+                    continue  # Skip deleted object
+                st.markdown("---")
+                cols = st.columns([1, 2, 2])
+                with cols[0]:
+                    if st.button("🗑 Xoá", key=f"del_{obj['id']}"):
+                        st.session_state.deleted_ids.add(obj["id"])
+                        continue
+                    st.markdown(f"**ID {obj['id'].split('_')[0]}**")
+                with cols[1]:
+                    obj["object"] = st.selectbox("Object", object_types, index=object_types.index(obj["object"]) if obj["object"] in object_types else 0, key=f"obj_{obj['id']}")
+                with cols[2]:
+                    obj["status"] = st.selectbox("Status", status_types, index=status_types.index(obj["status"]) if obj["status"] in status_types else 0, key=f"status_{obj['id']}")
+                updated_objects.append(obj)
+
+            if st.button("✅ Apply Feedback", key=f"apply_feedback_btn_{st.session_state.frame_idx}"):
+                frame_name = f"frame_{st.session_state.frame_idx}.jpg"
+                log_path = Path(f"data/feedback/{video_file.name}_feedback.json")
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                try:
+                    with open(log_path, "r", encoding="utf-8") as f:
+                        existing = json.load(f)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    existing = []
+
+                new_entries = [{
+                    "object_id": obj["id"],
+                    "frame": frame_name,
+                    "new_object": obj["object"],
+                    "new_status": obj["status"],
+                    "bbox": obj["bbox"]
+                } for obj in updated_objects]
+
+                appended = 0
+                for entry in new_entries:
+                    if entry not in existing:
+                        existing.append(entry)
+                        appended += 1
+
+                with open(log_path, "w", encoding="utf-8") as f:
+                    json.dump(existing, f, ensure_ascii=False, indent=2)
+
+                if appended:
+                    st.success(f"✅ Ghi {appended} feedback vào `{log_path.name}`")
                 else:
-                    st.markdown(f"**ID {obj['id']}**")
+                    st.info("⚠️ Không có thay đổi mới.")
 
-            with cols[1]:
-                default_obj = obj["object"] if obj["object"] in object_types else object_types[0]
-                obj["object"] = st.selectbox("Object", object_types, index=object_types.index(default_obj), key=f"obj_{i}")
-
-            with cols[2]:
-                default_status = obj["status"] if obj["status"] in status_types else status_types[0]
-                obj["status"] = st.selectbox("Status", status_types, index=status_types.index(default_status), key=f"status_{i}")
-
-            updated_objects.append(obj)
-
-        st.markdown("---")
-        if st.button("✅ Apply Change"):
-            apply_feedback(updated_objects, f"frame_{frame_idx:06d}.jpg")
-            # Vẽ lại ảnh sau khi apply
-            drawn = draw_bboxes(frame_rgb, objects)
-            st.image(drawn, caption=f"🖼️ Updated Frame {frame_idx}", use_column_width=True)
-
-    # ------------------------ Playback Controls ------------------------
-    st.markdown("---")
-    colA, colB, colC = st.columns([1, 2, 1])
-    with colA:
-        if st.button("⬅️ Previous"):
-            st.session_state.frame_idx = max(0, frame_idx - 1)
-
-    with colB:
-        play_label = "⏸ Pause" if st.session_state.playing else "▶️ Play"
-        if st.button(play_label):
-            st.session_state.playing = not st.session_state.playing
-        st.selectbox("⏱ Tốc độ phát", options=[0.25, 0.5, 1.0, 1.5, 2.0], key="playback_speed")
-
-    with colC:
-        if st.button("➡️ Next"):
-            st.session_state.frame_idx = min(total_frames - 1, frame_idx + 1)
-
-
-    if st.session_state.playing:
-        time.sleep(max(0.005, 1.0 / st.session_state.playback_speed))
-        skip_n = 1 if st.session_state.playback_speed <= 1.0 else int(round(st.session_state.playback_speed))
-        st.session_state.frame_idx = min(total_frames - 1, frame_idx + skip_n)
+    if st.session_state.is_playing:
+        st.session_state.frame_idx += 1
+        time.sleep(delay)
         st.experimental_rerun()
-
-
 
